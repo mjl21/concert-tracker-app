@@ -26,40 +26,37 @@ artist_names = [artist['name'] for artist in results['items']]
 excluded_artists = {"blippi", "ms. rachel", "raffi", "beyonce", "robyn", "chappell roan", "elmo", "doobie brothers"}
 artist_names = [name for name in artist_names if name.lower() not in excluded_artists]
 
-# --- Query Songkick API ---
-concert_data = []
-for artist in artist_names:
+# --- Ticketmaster API key from Streamlit secrets ---
+TICKETMASTER_API_KEY = st.secrets["TICKETMASTER_API_KEY"]
+
+def get_ticketmaster_events(artist_name, city, radius=30):
+    url = "https://app.ticketmaster.com/discovery/v2/events.json"
     params = {
-        "apikey": st.secrets["SONGKICK_API_KEY"],
-        "query": artist
+        "apikey": TICKETMASTER_API_KEY,
+        "keyword": artist_name,
+        "city": city,
+        "radius": radius,
+        "unit": "miles",
+        "sort": "date,asc",
+        "countryCode": "US"
     }
-    response = requests.get("https://api.songkick.com/api/3.0/search/artists.json", params=params)
-    results = response.json()
-
-    if results['resultsPage']['totalEntries'] > 0:
-        artist_id = results['resultsPage']['results']['artist'][0]['id']
-        gig_url = f"https://api.songkick.com/api/3.0/artists/{artist_id}/calendar.json"
-        gigs = requests.get(gig_url, params={"apikey": st.secrets["SONGKICK_API_KEY"]}).json()
-
-        for event in gigs['resultsPage']['results'].get('event', []):
-            location = event['location']['city']
-            if "New York" in location or "NY" in location or "Brooklyn" in location:  # crude filter for 30-mile radius
-                date = datetime.strptime(event['start']['date'], "%Y-%m-%d")
-                time_str = event['start'].get('time', '')
-                if time_str:
-                    time_fmt = datetime.strptime(time_str, "%H:%M:%S").strftime("%-I:%M%p").lower()
-                else:
-                    time_fmt = "TBD"
-                concert_data.append({
-                    "Artist": artist,
-                    "Date": date,
-                    "Venue": event['venue']['displayName'],
-                    "City": location,
-                    "Time": time_fmt,
-                    "Event": event['displayName'],
-                    "Opening Act": ', '.join(p['artist']['displayName'] for p in event['performance'][1:]) if len(event['performance']) > 1 else '',
-                    "Link": f"[Link]({event['uri']})"
-                })
+    response = requests.get(url, params=params)
+    data = response.json()
+    
+    events = []
+    if "_embedded" in data and "events" in data["_embedded"]:
+        for event in data["_embedded"]["events"]:
+            events.append({
+                "Artist": artist_name,
+                "Date": event["dates"]["start"]["localDate"],
+                "Time": event["dates"]["start"].get("localTime", ""),
+                "Venue": event["_embedded"]["venues"][0]["name"],
+                "City": event["_embedded"]["venues"][0]["city"]["name"],
+                "Event": event["name"],
+                "Link": event["url"],
+                "Opening Act": ""  # Ticketmaster API does not explicitly provide this
+            })
+    return events
 
 # --- Display Data ---
 if concert_data:
