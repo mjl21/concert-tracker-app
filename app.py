@@ -4,7 +4,6 @@ from spotipy.oauth2 import SpotifyOAuth
 import requests
 import pandas as pd
 from datetime import datetime
-from urllib.parse import urlencode
 
 # --- Page setup ---
 st.set_page_config(page_title="Concert Tracker", layout="wide")
@@ -18,11 +17,14 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     scope="user-top-read"
 ))
 
-# --- Fetch top 100 artists ---
+# --- User input for city ---
+city = st.text_input("Enter your city to find nearby concerts", "New York")
+
+# --- Fetch top 50 artists from Spotify ---
 results = sp.current_user_top_artists(limit=50, time_range='medium_term')
 artist_names = [artist['name'] for artist in results['items']]
 
-# --- Exclude kids/music ---
+# --- Exclude certain artists ---
 excluded_artists = {"blippi", "ms. rachel", "raffi", "beyonce", "robyn", "chappell roan", "elmo", "doobie brothers"}
 artist_names = [name for name in artist_names if name.lower() not in excluded_artists]
 
@@ -46,24 +48,35 @@ def get_ticketmaster_events(artist_name, city, radius=30):
     events = []
     if "_embedded" in data and "events" in data["_embedded"]:
         for event in data["_embedded"]["events"]:
+            venue = event["_embedded"]["venues"][0]
             events.append({
                 "Artist": artist_name,
                 "Date": event["dates"]["start"]["localDate"],
                 "Time": event["dates"]["start"].get("localTime", ""),
-                "Venue": event["_embedded"]["venues"][0]["name"],
-                "City": event["_embedded"]["venues"][0]["city"]["name"],
+                "Venue": venue["name"],
+                "City": venue["city"]["name"],
                 "Event": event["name"],
                 "Link": event["url"],
-                "Opening Act": ""  # Ticketmaster API does not explicitly provide this
+                "Opening Act": ""  # Ticketmaster doesn't provide this info
             })
     return events
 
-# --- Display Data ---
-if concert_data:
-    df = pd.DataFrame(concert_data)
-    df.sort_values(by="Date", inplace=True)
-    df['Date'] = df['Date'].dt.strftime('%b %d %Y')
-    st.markdown("### 🎤 Upcoming Concerts Near NYC")
-    st.dataframe(df[['Artist', 'Date', 'Venue', 'City', 'Time', 'Event', 'Opening Act', 'Link']], use_container_width=True)
+# --- Fetch events for all artists and show results ---
+if city:
+    concert_data = []
+    with st.spinner("Fetching concerts for your top artists..."):
+        for artist in artist_names:
+            events = get_ticketmaster_events(artist, city)
+            concert_data.extend(events)
+    
+    if concert_data:
+        df = pd.DataFrame(concert_data)
+        df['Date'] = pd.to_datetime(df['Date'])
+        df.sort_values(by="Date", inplace=True)
+        df['Date'] = df['Date'].dt.strftime('%b %d %Y')
+        st.markdown(f"### 🎤 Upcoming Concerts Near {city.title()}")
+        st.dataframe(df[['Artist', 'Date', 'Venue', 'City', 'Time', 'Event', 'Opening Act', 'Link']], use_container_width=True)
+    else:
+        st.info(f"No upcoming concerts found for your top artists near {city.title()}.")
 else:
-    st.info("No upcoming concerts found for your top artists near New York, NY.")
+    st.info("Please enter a city to search for concerts.")
