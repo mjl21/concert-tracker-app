@@ -15,14 +15,9 @@ SPOTIPY_CLIENT_SECRET = st.secrets["SPOTIPY_CLIENT_SECRET"]
 SPOTIPY_REDIRECT_URI = st.secrets["SPOTIPY_REDIRECT_URI"]
 TICKETMASTER_API_KEY = st.secrets["TICKETMASTER_API_KEY"]
 
-# --- Spotify Authentication ---
-scope = "user-top-read"
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-    client_id=SPOTIPY_CLIENT_ID,
-    client_secret=SPOTIPY_CLIENT_SECRET,
-    redirect_uri=SPOTIPY_REDIRECT_URI,
-    scope=scope
-))
+# --- Spotify Authentication using static token ---
+SPOTIFY_ACCESS_TOKEN = st.secrets["SPOTIFY_ACCESS_TOKEN"]
+sp = spotipy.Spotify(auth=SPOTIFY_ACCESS_TOKEN)
 
 # --- Excluded artists ---
 excluded_artists = {'blippi', 'ms. rachel', 'raffi', 'beyoncé', 'robyn', 'chappell roan', 'the doobie brothers'}
